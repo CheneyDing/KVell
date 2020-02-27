@@ -1,5 +1,5 @@
 #include "headers.h"
-#include "indexes/btree.h"
+#include "indexes/bplustree.h"
 
 static uint64_t get_prefix_for_item(char *item) {
    struct item_metadata *meta = (struct item_metadata *)item;
@@ -7,42 +7,42 @@ static uint64_t get_prefix_for_item(char *item) {
    return *(uint64_t*)item_key;
 }
 
-/* In memory RB-Tree */
-static btree_t **items_locations;
+/* In memory BPLUS-Tree */
+static bplustree_t **items_locations;
 static __thread index_entry_t tmp_entry;
 static pthread_spinlock_t *items_location_locks;
-index_entry_t *btree_worker_lookup(int worker_id, void *item) {
+index_entry_t *bplustree_worker_lookup(int worker_id, void *item) {
    uint64_t hash = get_prefix_for_item(item);
-   int res = btree_find(items_locations[worker_id], (unsigned char*)&hash, sizeof(hash), &tmp_entry);
+   int res = bplustree_find(items_locations[worker_id], (unsigned char*)&hash, sizeof(hash), &tmp_entry);
    if(res)
       return &tmp_entry;
    else
       return NULL;
 }
-void btree_worker_insert(int worker_id, void *item, index_entry_t *e) {
+void bplustree_worker_insert(int worker_id, void *item, index_entry_t *e) {
    uint64_t hash = get_prefix_for_item(item);
 
    pthread_spin_lock(&items_location_locks[worker_id]);
-   btree_insert(items_locations[worker_id], (unsigned char*)&hash, sizeof(hash), e);
+   bplustree_insert(items_locations[worker_id], (unsigned char*)&hash, sizeof(hash), e);
    pthread_spin_unlock(&items_location_locks[worker_id]);
 }
-void btree_worker_delete(int worker_id, void *item) {
+void bplustree_worker_delete(int worker_id, void *item) {
    index_entry_t *old_entry = NULL;
    uint64_t hash = get_prefix_for_item(item);
 
    pthread_spin_lock(&items_location_locks[worker_id]);
-   btree_delete(items_locations[worker_id], (unsigned char *)&(hash), sizeof(hash));
+   bplustree_delete(items_locations[worker_id], (unsigned char *)&(hash), sizeof(hash));
    pthread_spin_unlock(&items_location_locks[worker_id]);
 
    if(old_entry)
       free(old_entry);
 }
 
-void btree_index_add(struct slab_callback *cb, void *item) {
+void bplustree_index_add(struct slab_callback *cb, void *item) {
    index_entry_t new_entry;
    new_entry.slab_id = cb->slab->slab_id;
    new_entry.slab_idx = cb->slab_idx;
-   btree_worker_insert(get_worker(cb->slab), item, &new_entry);
+   bplustree_worker_insert(get_worker(cb->slab), item, &new_entry);
 }
 
 
@@ -50,7 +50,7 @@ void btree_index_add(struct slab_callback *cb, void *item) {
  * Returns up to scan_size keys >= item.key.
  * If item is not in the database, this will still return up to scan_size keys > item.key.
  */
-struct index_scan btree_init_scan(void *item, size_t scan_size) {
+struct index_scan bplustree_init_scan(void *item, size_t scan_size) {
    struct index_scan scan_res;
    size_t nb_workers = get_nb_workers();
    uint64_t hash = get_prefix_for_item(item);
@@ -58,7 +58,7 @@ struct index_scan btree_init_scan(void *item, size_t scan_size) {
    struct index_scan *res = malloc(nb_workers * sizeof(*res));
    for(size_t w = 0; w < nb_workers; w++) {
       pthread_spin_lock(&items_location_locks[w]);
-      res[w] = btree_find_n(items_locations[w], (unsigned char *)&(hash), sizeof(hash), scan_size);
+      res[w] = bplustree_find_n(items_locations[w], (unsigned char *)&(hash), sizeof(hash), scan_size);
       pthread_spin_unlock(&items_location_locks[w]);
    }
 
@@ -100,42 +100,14 @@ struct index_scan btree_init_scan(void *item, size_t scan_size) {
    return scan_res;
 }
 
-/*struct index_scan btree_init_scan(void *item, size_t scan_size) {
-   struct index_scan scan_res;
-   size_t nb_workers = get_nb_workers();
-   uint64_t hash = get_prefix_for_item(item);
-
-   struct index_scan *res = malloc(nb_workers * sizeof(*res));
-   for(size_t w = 0; w < nb_workers; w++) {
-      pthread_spin_lock(&items_location_locks[w]);
-      res[w] = btree_find_n(items_locations[w], (unsigned char *)&(hash), sizeof(hash), scan_size);
-      pthread_spin_unlock(&items_location_locks[w]);
-   }
-
-   btree_t *b = btree_create();
-   for(size_t w = 0; w < nb_workers; w++) {
-      for(size_t i = 0; i < res[w].nb_entries; i++) {
-         btree_insert(b, (unsigned char*)&(res[w].hashes[i]), sizeof(res[w].hashes[i]), &res[w].entries[i]);
-      }
-   }
-   scan_res = btree_find_n(b, (unsigned char *)&(hash), sizeof(hash), scan_size);
-   for(size_t w = 0; w < nb_workers; w++) {
-      free(res[w].hashes);
-      free(res[w].entries);
-   }
-   free(res);
-   btree_free(b);
-
-   return scan_res;
-}*/
-
-void btree_items_init(void) {
+void bplustree_items_init(void) {
    items_locations = malloc(get_nb_workers() * sizeof(*items_locations));
    items_location_locks = malloc(get_nb_workers() * sizeof(*items_location_locks));
 }
 
-void btree_init(size_t worker_id) {
-   items_locations[worker_id] = btree_create();
+void bplustree_init(size_t worker_id) {
+   items_locations[worker_id] = bplustree_create(worker_id);
    pthread_spin_init(&items_location_locks[worker_id], PTHREAD_PROCESS_PRIVATE);
 }
+
 

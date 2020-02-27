@@ -122,6 +122,11 @@ static struct slab_context *get_slab_context(void *item) {
    return &slab_contexts[hash%get_nb_workers()];
 }
 
+/* get slab context by worker_id */
+struct slab_context *get_slab_context_by_worker_id(int worker_id) {
+   return &slab_contexts[worker_id];
+}
+
 size_t get_item_size(char *item) {
    struct item_metadata *meta = (struct item_metadata *)item;
    return sizeof(*meta) + meta->key_size + meta->value_size;
@@ -139,6 +144,12 @@ static struct slab *get_slab(struct slab_context *ctx, void *item) {
 struct slab *get_item_slab(int worker_id, void *item) {
    struct slab_context *ctx = get_slab_context(item);
    return get_slab(ctx, item);
+}
+
+/* get item slab by slab_id */
+struct slab* get_item_slab_by_id(int worker_id, size_t slab_id) {
+   struct slab_context *ctx = get_slab_context_by_worker_id(worker_id);
+   return ctx->slabs[slab_id];
 }
 
 static void enqueue_slab_callback(struct slab_context *ctx, enum slab_action action, struct slab_callback *callback) {
@@ -169,10 +180,11 @@ void kv_read_async(struct slab_callback *callback) {
    return enqueue_slab_callback(ctx, READ, callback);
 }
 
-void kv_read_async_no_lookup(struct slab_callback *callback, struct slab *s, size_t slab_idx) {
-   callback->slab = s;
+void kv_read_async_no_lookup(struct slab_callback *callback, size_t slab_id, size_t slab_idx) {
+   struct slab_context *ctx = get_slab_context(callback->item);
+   callback->slab = get_item_slab_by_id(ctx->worker_id, slab_id);
    callback->slab_idx = slab_idx;
-   return enqueue_slab_callback(s->ctx, READ_NO_LOOKUP, callback);
+   return enqueue_slab_callback(ctx, READ_NO_LOOKUP, callback);
 }
 
 void kv_add_async(struct slab_callback *callback) {
@@ -231,7 +243,7 @@ again:
                callback->slab_idx = -1;
                callback->cb(callback, NULL);
             } else {
-               callback->slab = e->slab;
+               callback->slab = get_item_slab_by_id(ctx->worker_id, e->slab_id);
                callback->slab_idx = e->slab_idx;
                read_item_async(callback);
             }
@@ -251,9 +263,9 @@ again:
                callback->slab_idx = -1;
                callback->cb(callback, NULL);
             } else {
-               callback->slab = e->slab;
+               callback->slab = get_item_slab_by_id(ctx->worker_id, e->slab_id);
                callback->slab_idx = e->slab_idx;
-               assert(get_item_size(callback->item) <= e->slab->item_size); // Item grew, this is not supported currently!
+               assert(get_item_size(callback->item) <= callback->slab->item_size); // Item grew, this is not supported currently!
                update_item_async(callback);
             }
             break;
@@ -265,9 +277,9 @@ again:
                add_item_async(callback);
             } else {
                callback->action = UPDATE;
-               callback->slab = e->slab;
+               callback->slab = get_item_slab_by_id(ctx->worker_id, e->slab_id);
                callback->slab_idx = e->slab_idx;
-               assert(get_item_size(callback->item) <= e->slab->item_size); // Item grew, this is not supported currently!
+               assert(get_item_size(callback->item) <= callback->slab->item_size); // Item grew, this is not supported currently!
                update_item_async(callback);
             }
          case DELETE:
@@ -276,7 +288,7 @@ again:
                callback->slab_idx = -1;
                callback->cb(callback, NULL);
             } else {
-               callback->slab = e->slab;
+               callback->slab = get_item_slab_by_id(ctx->worker_id, e->slab_id);
                callback->slab_idx = e->slab_idx;
                memory_index_delete(ctx->worker_id, callback->item);
                remove_item_async(callback);
@@ -335,6 +347,9 @@ static void *worker_slab_init(void *pdata) {
    ctx->pagecache = calloc(1, sizeof(*ctx->pagecache));
    page_cache_init(ctx->pagecache);
 
+   /* Create the memory index for the worker */
+   memory_index_init(ctx->worker_id);
+
    /* Initialize the async io for the worker */
    ctx->io_ctx = worker_ioengine_init(ctx->max_pending_callbacks);
 
@@ -344,7 +359,7 @@ static void *worker_slab_init(void *pdata) {
    struct slab_callback *cb = malloc(sizeof(*cb));
    cb->cb = worker_slab_init_cb;
    for(size_t i = 0; i < nb_slabs; i++) {
-      ctx->slabs[i] = create_slab(ctx, ctx->worker_id, slab_sizes[i], cb);
+      ctx->slabs[i] = create_slab(ctx, ctx->worker_id, i, slab_sizes[i], cb);
    }
    free(cb);
 
@@ -384,7 +399,7 @@ void slab_workers_init(int _nb_disks, int nb_workers_per_disk) {
    nb_disks = _nb_disks;
    nb_workers = nb_disks * nb_workers_per_disk;
 
-   memory_index_init();
+   memory_index_items_init();
 
    pthread_t t;
    slab_contexts = calloc(nb_workers, sizeof(*slab_contexts));

@@ -102,12 +102,11 @@ void rebuild_index(int slab_worker_id, struct slab *s, struct slab_callback *cal
 
 
 
-
 /*
  * Create a slab: a file that only contains items of a given size.
  * @callback is a callback that will be called on all previously existing items of the slab if it is restored from disk.
  */
-struct slab* create_slab(struct slab_context *ctx, int slab_worker_id, size_t item_size, struct slab_callback *callback) {
+struct slab* create_slab(struct slab_context *ctx, int slab_worker_id, size_t slab_id, size_t item_size, struct slab_callback *callback) {
    struct stat sb;
    char path[512];
    struct slab *s = calloc(1, sizeof(*s));
@@ -132,6 +131,7 @@ struct slab* create_slab(struct slab_context *ctx, int slab_worker_id, size_t it
    s->nb_free_items = 0;
    s->last_item = 0;
    s->ctx = ctx;
+   s->slab_id = slab_id;
 
    // Read the first page and rebuild the index if the file contains data
    struct item_metadata *meta = read_item(s, 0);

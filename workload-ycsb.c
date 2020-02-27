@@ -64,7 +64,7 @@ static void _launch_ycsb_e(int test, int nb_requests, int zipfian) {
          for(size_t j = 0; j < scan_res.nb_entries; j++) {
             struct slab_callback *cb = bench_cb();
             cb->item = _create_unique_item_ycsb(scan_res.hashes[j]);
-            kv_read_async_no_lookup(cb, scan_res.entries[j].slab, scan_res.entries[j].slab_idx);
+            kv_read_async_no_lookup(cb, scan_res.entries[j].slab_id, scan_res.entries[j].slab_idx);
          }
          free(scan_res.hashes);
          free(scan_res.entries);

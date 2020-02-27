@@ -38,7 +38,7 @@ static void launch_prod(struct workload *w, bench_t b) {
          for(size_t j = 0; j < scan_res.nb_entries; j++) {
             cb = bench_cb();
             cb->item = create_unique_item_prod(scan_res.hashes[j], w->nb_items_in_db);
-            kv_read_async_no_lookup(cb, scan_res.entries[j].slab, scan_res.entries[j].slab_idx);
+            kv_read_async_no_lookup(cb, scan_res.entries[j].slab_id, scan_res.entries[j].slab_idx);
          }
          free(scan_res.hashes);
          free(scan_res.entries);

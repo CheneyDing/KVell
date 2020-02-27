@@ -36,9 +36,9 @@ void art_worker_delete(int worker_id, void *item) {
 
 void art_index_add(struct slab_callback *cb, void *item) {
    index_entry_t *new_entry = malloc(sizeof(*new_entry));
-   new_entry->slab = cb->slab;
+   new_entry->slab_id = cb->slab->slab_id;
    new_entry->slab_idx = cb->slab_idx;
-   art_worker_insert(get_worker(new_entry->slab), item, new_entry);
+   art_worker_insert(get_worker(cb->slab), item, new_entry);
 }
 
 

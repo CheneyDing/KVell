@@ -17,6 +17,7 @@ struct slab {
    size_t nb_max_items;
 
    int fd;
+   size_t slab_id;
    size_t size_on_disk;
 
    size_t nb_free_items, nb_free_items_in_memory;
@@ -46,7 +47,7 @@ struct slab_callback {
    io_cb_t *io_cb;
 };
 
-struct slab* create_slab(struct slab_context *ctx, int worker_id, size_t item_size, struct slab_callback *callback);
+struct slab* create_slab(struct slab_context *ctx, int worker_id, size_t slab_id, size_t item_size, struct slab_callback *callback);
 struct slab* resize_slab(struct slab *s);
 
 void *read_item(struct slab *s, size_t idx);

@@ -26,10 +26,10 @@ void rbtree_worker_delete(int worker_id, void *item) {
 
 void rbtree_index_add(struct slab_callback *cb, void *item) {
    index_entry_t e = {
-      .slab = cb->slab,
+      .slab_id = cb->slab->slab_id,
       .slab_idx = cb->slab_idx,
    };
-   rbtree_worker_insert(get_worker(e.slab), item, &e);
+   rbtree_worker_insert(get_worker(cb->slab), item, &e);
 }
 
 

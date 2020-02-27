@@ -14,7 +14,7 @@ void kv_remove_async(struct slab_callback *callback);
 
 typedef struct index_scan tree_scan_res_t;
 tree_scan_res_t kv_init_scan(void *item, size_t scan_size);
-void kv_read_async_no_lookup(struct slab_callback *callback, struct slab *s, size_t slab_idx);
+void kv_read_async_no_lookup(struct slab_callback *callback, size_t slab_id, size_t slab_idx);
 
 size_t get_database_size(void);
 
@@ -30,4 +30,7 @@ int get_worker(struct slab *s);
 int get_nb_disks(void);
 struct slab *get_item_slab(int worker_id, void *item);
 size_t get_item_size(char *item);
+
+struct slab* get_item_slab_by_id(int worker_id, size_t slab_id);
+struct slab_context *get_slab_context_by_worker_id(int worker_id);
 #endif

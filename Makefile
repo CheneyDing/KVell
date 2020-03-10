@@ -7,7 +7,9 @@ CXXFLAGS= ${CFLAGS} -std=c++11
 
 LDLIBS=-lm -lpthread -lstdc++
 
-INDEXES_OBJ=indexes/rbtree.o indexes/rax.o indexes/art.o indexes/btree.o indexes/bplustree.o indexes/cpp-bplustree/bplustree.o 
+BPLUSTREE_OBJ=indexes/cpp-bplustree/bplustree.o 
+
+INDEXES_OBJ=indexes/rbtree.o indexes/rax.o indexes/art.o indexes/btree.o indexes/bplustree.o ${BPLUSTREE_OBJ} 
 MAIN_OBJ=main.o slab.o freelist.o ioengine.o pagecache.o stats.o random.o slabworker.o workload-common.o workload-ycsb.o workload-production.o utils.o in-memory-index-rbtree.o in-memory-index-rax.o in-memory-index-art.o in-memory-index-btree.o in-memory-index-bplustree.o ${INDEXES_OBJ} 
 MICROBENCH_OBJ=microbench.o random.o stats.o utils.o ${INDEXES_OBJ}
 BENCH_OBJ=benchcomponents.o pagecache.o random.o $(INDEXES_OBJ)
@@ -17,7 +19,7 @@ BENCH_OBJ=benchcomponents.o pagecache.o random.o $(INDEXES_OBJ)
 
 all: makefile.dep main microbench benchcomponents
 
-makefile.dep: *.[Cch] indexes/*.[ch] indexes/*.cc
+makefile.dep: *.[Cch] indexes/*.[ch] indexes/*.cc indexes/*/*.cc
 	for i in *.[Cc]; do ${CC} -MM "$${i}" ${CFLAGS}; done > $@
 	for i in indexes/*.c; do ${CC} -MM "$${i}" -MT $${i%.c}.o ${CFLAGS}; done >> $@
 	for i in indexes/*.cc; do ${CXX} -MM "$${i}" -MT $${i%.cc}.o ${CXXFLAGS}; done >> $@
@@ -26,11 +28,14 @@ makefile.dep: *.[Cch] indexes/*.[ch] indexes/*.cc
 -include makefile.dep
 
 main: $(MAIN_OBJ)
+	${CXX} $^ ${CXXFLAGES} ${LDLIBS} -o main
 
 microbench: $(MICROBENCH_OBJ)
 
 benchcomponents: $(BENCH_OBJ)
 
+bplustree: $(BPLUSTREE_OBJ)
+
 clean:
-	rm -f *.o indexes/*.o main microbench benchcomponents
+	rm -f *.o indexes/*.o indexes/cpp-bplustree/*.o  main microbench benchcomponents
 
